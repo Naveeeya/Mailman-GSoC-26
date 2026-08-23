@@ -2,8 +2,9 @@
 
 **Report: https://naveeeya.github.io/Mailman-GSoC-26/**
 
-Two commands for Mailman Core that write a mailing list's complete state to a JSON
-file and rebuild the list from that file.
+Two commands for Mailman Core that serialise a mailing list's complete state to
+JSON and rebuild the list from it. The library deals in data structures rather
+than file paths, so the CLI and a future REST endpoint share the same code.
 
 ```
 mailman backup  <listspec> [output_path]
