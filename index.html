@@ -225,6 +225,7 @@ footer{border-top:1px solid var(--rule-strong);padding:var(--s4) 0 var(--s7);
     <li><a href="#design">Design</a></li>
     <li><a href="#history">How it was built</a></li>
     <li><a href="#state">Status</a></li>
+    <li><a href="#future">Continuing to contribute</a></li>
     <li><a href="#notes">Implementation notes</a></li>
     <li><a href="#limits">Known limitations</a></li>
     <li><a href="#code">Code</a></li>
@@ -491,14 +492,34 @@ def restore_list(data, fqdn_listname=None, overwrite=False):
     <li><span class="tag done">Done</span> <span>Restore in a single transaction, schema validated before the first write</span></li>
     <li><span class="tag done">Done</span> <span><code>mailman backup</code>, <code>mailman restore</code> with <code>--listname</code>, <code>--overwrite</code>, <code>--yes</code></span></li>
     <li><span class="tag done">Done</span> <span>67 tests · 100% branch diff coverage on 287 changed lines · green on SQLite, PostgreSQL and MySQL, Python 3.9 to 3.13</span></li>
-    <li><span class="tag todo">Next</span> <span><code>GET /3.1/lists/{listname}/backup</code> and <code>POST .../restore</code> in Core</span></li>
-    <li><span class="tag todo">Next</span> <span><code>.backup()</code> and <code>.restore()</code> in mailmanclient</span></li>
-    <li><span class="tag todo">Next</span> <span>Download and upload buttons in Postorius</span></li>
   </ul>
-  <p>The REST endpoints are specified and not implemented, and the two layers above them wait on
-  those. The library is already the right shape for them: <code>export_list()</code> returns a dict
-  and <code>restore_list()</code> takes one, with no file handling in either.</p>
   <p>!1505 is open with 7 review threads outstanding.</p>
+</section>
+
+<section id="future">
+  <h2>Continuing to contribute</h2>
+  <p>Three pieces remain, and they stack in order. Each one is a separate merge request
+  against a separate repository, which is part of why they were scoped out.</p>
+
+  <p><strong>REST endpoints in Core.</strong> <code>GET /3.1/lists/{listname}/backup</code>
+  returns the dictionary <code>export_list()</code> already produces.
+  <code>POST /3.1/lists/{listname}/restore</code> takes a backup as the request body, with an
+  optional <code>overwrite</code> parameter matching the CLI flag. Neither needs new logic in
+  the backup manager. The library was shaped for exactly this: <code>export_list()</code>
+  returns a dict, <code>restore_list()</code> accepts one, and no file handling sits between
+  them. What the endpoints need is their own test layer and their own review pass.</p>
+
+  <p><strong>A wrapper in mailmanclient.</strong> A <code>.backup()</code> and
+  <code>.restore()</code> pair on the list object, so Python tooling can reach the feature
+  without hand-rolling HTTP calls. Small, once the endpoints exist.</p>
+
+  <p><strong>Buttons in Postorius.</strong> A download control that streams the JSON to the
+  browser, and an upload form that posts it back. This is the version list administrators will
+  actually use, since most of them never open a terminal. It was the first idea suggested for
+  this project, and it ends up last because it sits on top of everything else.</p>
+
+  <p>I plan to keep contributing to Mailman after the program ends, starting with the REST
+  endpoints.</p>
 </section>
 
 <section id="notes">
