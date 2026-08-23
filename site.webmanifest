@@ -1,0 +1,16 @@
+{
+  "name": "Per-List Backup and Restore for GNU Mailman",
+  "short_name": "Mailman Backup",
+  "description": "mailman backup and mailman restore: write a mailing list's complete state to JSON and rebuild it. GNU Mailman Core, Google Summer of Code 2026.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "browser",
+  "background_color": "#E9EDF0",
+  "theme_color": "#E9EDF0",
+  "lang": "en",
+  "categories": ["developer", "documentation"],
+  "icons": [
+    { "src": "images/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "images/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

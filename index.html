@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Per-List Backup and Restore for GNU Mailman — GSoC 2026</title>
+<meta name="description" content="mailman backup and mailman restore: serialise a mailing list's complete state to JSON and rebuild it. GNU Mailman Core, Google Summer of Code 2026.">
+<meta name="author" content="Navya Khanna">
+<link rel="manifest" href="site.webmanifest">
+<meta name="theme-color" content="#FCFCFA">
+<meta property="og:title" content="Per-List Backup and Restore for GNU Mailman">
+<meta property="og:description" content="Two commands for Mailman Core that write a mailing list's complete state to JSON and rebuild it. GSoC 2026.">
+<meta property="og:type" content="article">
+<meta property="og:image" content="images/05-anatomy.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#FCFCFA;
+  --card:#F4F4EF;
+  --ink:#1A1D23;
+  --muted:#646B75;
+  --rule:#E4E4DD;
+  --rule-strong:#CFCFC6;
+  --accent:#0E5257;
+  --flag:#8A5A00;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"Source Sans 3",-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,sans-serif;
+  --serif:"Source Serif 4",Georgia,"Times New Roman",serif;
+
+  --s1:8px; --s2:16px; --s3:24px; --s4:32px;
+  --s5:48px; --s6:64px; --s7:88px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--paper);color:var(--ink);
+     font-family:var(--sans);font-size:17.5px;line-height:1.7;
+     -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+.wrap{max-width:720px;margin:0 auto;padding:0 24px}
+a{color:var(--accent);text-decoration:none;
+  border-bottom:1px solid rgba(14,82,87,.28)}
+a:hover{border-bottom-color:var(--accent)}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+
+/* ============ hero, centred ============ */
+.masthead{text-align:center;padding:var(--s7) 0 0}
+.logos{display:flex;align-items:center;justify-content:center;
+       gap:var(--s3);margin:0 0 var(--s5)}
+.logos img{display:block;width:auto;mix-blend-mode:multiply}
+.logos .gsoc{height:82px}
+.logos .mailman{height:42px}
+.logos .div{width:1px;height:52px;background:var(--rule-strong);flex-shrink:0}
+h1{font-family:var(--serif);font-weight:700;
+   font-size:clamp(33px,6.2vw,50px);line-height:1.1;
+   margin:0 0 var(--s2);letter-spacing:-.02em}
+.sub{font-family:var(--serif);font-size:20px;font-style:italic;
+     color:var(--muted);margin:0 auto var(--s4);max-width:33em;line-height:1.5}
+.social{display:flex;gap:var(--s3);flex-wrap:wrap;justify-content:center;
+        list-style:none;padding:var(--s2) 0;margin:0;
+        border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.social li{margin:0}
+.social a{display:inline-flex;align-items:center;gap:7px;border-bottom:none;
+          font-family:var(--mono);font-size:12.5px;letter-spacing:.02em;
+          color:var(--muted)}
+.social a:hover{color:var(--accent)}
+.social svg{width:15px;height:15px;flex-shrink:0;stroke:currentColor;fill:none;
+            stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.social a:hover svg{stroke:var(--accent)}
+
+/* ============ facts strip ============ */
+.facts{margin:var(--s5) 0 var(--s6);font-family:var(--mono);font-size:13px;
+       line-height:1.75;text-align:left}
+.facts dl{display:grid;grid-template-columns:auto 1fr;
+          column-gap:var(--s3);row-gap:10px;margin:0}
+.facts dt{color:var(--muted);white-space:nowrap}
+.facts dd{margin:0}
+
+/* ============ contents ============ */
+.toc{border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);
+     padding:var(--s3) 0;margin:0 0 var(--s6)}
+.toc-head{font-family:var(--mono);font-size:10.5px;font-weight:600;
+          letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+          margin:0 0 var(--s2)}
+.toc ol{margin:0;padding:0;list-style:none;counter-reset:toc;
+        columns:2;column-gap:var(--s4)}
+.toc li{margin:0 0 8px;font-size:15px;break-inside:avoid;counter-increment:toc}
+.toc li::before{content:counter(toc,decimal-leading-zero);font-family:var(--mono);
+                font-size:10.5px;color:var(--muted);margin-right:10px}
+.toc a{border-bottom:none}
+.toc a:hover{border-bottom:1px solid var(--accent)}
+
+/* ============ sections ============ */
+section{margin:0 0 var(--s7);scroll-margin-top:var(--s3)}
+h2{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.16em;
+   text-transform:uppercase;color:var(--accent);
+   margin:0 0 var(--s3);padding:0 0 12px;border-bottom:1px solid var(--rule-strong)}
+h3{font-family:var(--serif);font-size:23px;font-weight:600;
+   margin:var(--s5) 0 var(--s1);letter-spacing:-.012em;line-height:1.3}
+p{margin:0 0 var(--s2)}
+ul,ol{margin:0 0 var(--s2);padding-left:24px}
+li{margin:0 0 10px}
+strong{font-weight:600}
+code{font-family:var(--mono);font-size:.85em;background:var(--card);
+     padding:2px 5px;border-radius:3px;color:var(--ink)}
+pre{font-family:var(--mono);font-size:13px;line-height:1.7;background:var(--card);
+    padding:var(--s2) var(--s3);overflow-x:auto;border-radius:4px;
+    margin:0 0 var(--s3)}
+pre code{background:none;padding:0;font-size:13px}
+
+/* ============ run steps ============ */
+.step{margin:0 0 var(--s6)}
+.step-n{font-family:var(--mono);font-size:10.5px;font-weight:600;
+        letter-spacing:.16em;text-transform:uppercase;color:var(--muted);
+        margin:0 0 var(--s1)}
+.step h3{margin:0 0 12px}
+.step p{margin:0 0 var(--s1)}
+figure{margin:var(--s3) 0 0}
+figure img{width:100%;height:auto;display:block;border-radius:4px}
+figcaption{font-size:14.5px;color:var(--muted);line-height:1.6;
+           margin-top:12px;font-style:italic}
+figcaption code{font-style:normal;font-size:.82em}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2)}
+@media (max-width:640px){.pair{grid-template-columns:1fr}}
+
+/* ============ tables ============ */
+table{width:100%;border-collapse:collapse;margin:0 0 var(--s3);font-size:15px}
+th{text-align:left;font-family:var(--mono);font-size:10.5px;font-weight:600;
+   letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+   padding:0 var(--s2) 10px 0;border-bottom:1px solid var(--rule-strong)}
+td{padding:12px var(--s2) 12px 0;border-bottom:1px solid var(--rule);
+   vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.m{font-family:var(--mono);font-size:12.5px;white-space:nowrap;color:var(--ink)}
+
+/* ============ status list ============ */
+.status{list-style:none;padding:0;margin:0 0 var(--s3)}
+.status li{display:flex;gap:var(--s2);align-items:baseline;padding:13px 0;
+           border-bottom:1px solid var(--rule);margin:0;font-size:15.5px}
+.status li:first-child{border-top:1px solid var(--rule-strong)}
+.status li:last-child{border-bottom:none}
+.tag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.12em;
+     text-transform:uppercase;flex-shrink:0;width:52px}
+.tag.done{color:var(--accent)}
+.tag.todo{color:var(--flag)}
+
+footer{border-top:1px solid var(--rule-strong);padding:var(--s4) 0 var(--s7);
+       font-family:var(--mono);font-size:12px;color:var(--muted);
+       line-height:1.9;text-align:center}
+
+@media (max-width:640px){
+  body{font-size:16.5px}
+  .masthead{padding-top:var(--s5)}
+  .logos{gap:var(--s2);margin-bottom:var(--s4)}
+  .logos .gsoc{height:60px}
+  .logos .mailman{height:31px}
+  .logos .div{height:38px}
+  .sub{font-size:18px}
+  .facts dl{grid-template-columns:1fr;row-gap:2px}
+  .facts dt{margin-top:10px}
+  .toc ol{columns:1}
+  td.m{white-space:normal}
+  .social{gap:var(--s2)}
+}
+@media print{
+  body{background:#fff;color:#000;font-size:10.5pt}
+  figure,.step,.toc,table{break-inside:avoid}
+  a{color:#000;border-bottom:none}
+  a[href^="http"]::after{content:" (" attr(href) ")";font-size:8pt;color:#555;word-break:break-all}
+  .toc a::after,.social a::after{content:none}
+  h2,h3{break-after:avoid}
+}
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<header class="masthead">
+  <div class="logos">
+    <img class="gsoc" src="images/gsoc-logo.png" alt="Google Summer of Code" width="82" height="82">
+    <span class="div"></span>
+    <img class="mailman" src="images/mailman-logo.jpg" alt="GNU Mailman">
+  </div>
+
+  <h1>Per-List Backup and Restore</h1>
+  <p class="sub">Write a mailing list's complete state to a JSON file, and rebuild the list from that file.</p>
+
+  <ul class="social">
+    <li><a href="https://gitlab.com/Naveeeya">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21 8.6 10.4h6.8L12 21Z"/><path d="M12 21 3 14.3l1.7-5.3L12 21Z"/><path d="M4.7 9 3 14.3 1.6 10a.9.9 0 0 1 .33-1L4.7 9Z"/><path d="M4.7 9 6.4 3.4c.15-.45.78-.45.93 0L8.6 9H4.7Z"/><path d="m12 21 9-6.7-1.7-5.3L12 21Z"/><path d="m19.3 9 1.7 5.3L22.4 10a.9.9 0 0 0-.33-1L19.3 9Z"/><path d="M19.3 9 17.6 3.4c-.15-.45-.78-.45-.93 0L15.4 9h3.9Z"/></svg>
+      GitLab</a></li>
+    <li><a href="https://github.com/Naveeeya">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4.5 1.5-4.5-2.5-6.5-3M15 21v-3.3a3 3 0 0 0-.8-2.3c2.7-.3 5.5-1.3 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6 0C6.5 2.7 5.5 3 5.5 3a4.3 4.3 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.4c0 4.7 2.8 5.7 5.5 6a3 3 0 0 0-.8 2.3V21"/></svg>
+      GitHub</a></li>
+    <li><a href="https://www.linkedin.com/in/navya-khanna">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7.5 10.5V17M7.5 7.5v.01M11.5 17v-3.8a2.2 2.2 0 0 1 4.4 0V17M11.5 17v-6.5"/></svg>
+      LinkedIn</a></li>
+    <li><a href="https://navyakhannahashnodedev.hashnode.dev">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h11a3 3 0 0 1 3 3V20a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 8.5V18a2.5 2.5 0 0 1-2.5 2.5"/><path d="M7 9h7M7 12.5h7"/></svg>
+      Blog</a></li>
+    <li><a href="mailto:navyakhanna140@gmail.com">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="m3 6.5 8.1 6a1.5 1.5 0 0 0 1.8 0l8.1-6"/></svg>
+      Email</a></li>
+  </ul>
+</header>
+
+<div class="facts">
+  <dl>
+    <dt>Component</dt><dd>Mailman Core</dd>
+    <dt>Commands</dt><dd><code>mailman backup</code>, <code>mailman restore</code></dd>
+    <dt>Merge request</dt><dd><a href="https://gitlab.com/mailman/mailman/-/merge_requests/1505">mailman!1505</a> · 33 commits across 11 files</dd>
+    <dt>Branch</dt><dd><a href="https://gitlab.com/Naveeeya/mailman/-/tree/gsoc/per-list-backup-restore">gsoc/per-list-backup-restore</a></dd>
+    <dt>Mentors</dt><dd>Abhilash Raj, Mark Sapiro, Stephen J. Turnbull</dd>
+    <dt>Author</dt><dd>Navya Khanna</dd>
+  </dl>
+</div>
+
+<nav class="toc" aria-label="Contents">
+  <p class="toc-head">On this page</p>
+  <ol>
+    <li><a href="#why">What it solves</a></li>
+    <li><a href="#run">The run</a></li>
+    <li><a href="#format">Backup format</a></li>
+    <li><a href="#design">Design</a></li>
+    <li><a href="#history">How it was built</a></li>
+    <li><a href="#state">Status</a></li>
+    <li><a href="#notes">Implementation notes</a></li>
+    <li><a href="#limits">Known limitations</a></li>
+    <li><a href="#code">Code</a></li>
+  </ol>
+</nav>
+
+<section id="why">
+  <h2>What it solves</h2>
+  <p>Mailman 2 kept each mailing list as a directory. Backing a list up meant copying a folder. Restoring it meant copying the folder back, which is about as simple as disaster recovery gets.</p>
+  <p>Mailman 3 moved list state into a relational database. That was right for scale, and it also quietly removed the escape hatch. If deleted a list today, there was no supported way to get it back: the members, the moderation rules, the aliases, the bans, all would just vanish. Everything needed to rebuild the list is sat in the database and nothing assembled it.</p>
+  <p>This adds two commands to Core, plus the <code>IListBackupManager</code> utility they both go through, so any front end can offer the same thing.</p>
+<pre><code>mailman backup  &lt;listspec&gt; [output_path]
+mailman restore &lt;backup_file&gt; [--listname NAME] [--overwrite] [--yes]</code></pre>
+</section>
+
+<section id="run">
+  <h2>The run</h2>
+  <p>Following is one session against a real Mailman instance, not the test suite. The list is the scenario my mentor asked about while the design was being settled: 100 members, 2 owners, 3 moderators, with configuration set in every section a backup covers.</p>
+
+  <div class="step">
+    <p class="step-n">01 · Environment</p>
+    <h3>A real instance</h3>
+    <figure>
+      <img src="images/01-environment.png" alt="Terminal output of mailman info showing GNU Mailman 3.3.11b1, Python 3.12.13, a SQLite database path and devmode disabled">
+      <figcaption>Mailman 3.3.11b1, Python 3.12, SQLite, devmode off.</figcaption>
+    </figure>
+  </div>
+
+  <div class="step">
+    <p class="step-n">02 · Subject</p>
+    <h3>The list</h3>
+    <figure>
+      <img src="images/02-seeded.png" alt="mailman members output listing a count of 100, two owners named Priya and Sam, and three moderators named Ada, Lin and Ravi">
+      <figcaption>100 members, 2 owners, 3 moderators. <code>--count-only</code> reports the member
+      roster alone; the backup carries all 105 entries.</figcaption>
+    </figure>
+  </div>
+
+  <div class="step">
+    <p class="step-n">03 · Before</p>
+    <h3>State in every section</h3>
+    <figure>
+      <img src="images/03-state-before.png" alt="Mailman shell output printing display name, subject prefix, archive policy, maximum message size, two topics, filter types, three acceptable aliases, four header matches with positions, and three bans">
+      <figcaption>Config, topics, content filters, aliases, four header match rules with their
+      evaluation positions, three bans. One of those bans, <code>^member100@.*</code>, is a regular
+      expression that matches a live member. That turns out to matter.</figcaption>
+    </figure>
+  </div>
+
+  <div class="step">
+    <p class="step-n">04 · Export</p>
+    <h3>mailman backup</h3>
+    <figure>
+      <img src="images/04-backup.png" alt="mailman backup writes announce.json and ls -lh reports a 36 kilobyte file">
+      <figcaption>36 KB of JSON for a 105-member list.</figcaption>
+    </figure>
+  </div>
+
+  <div class="step">
+    <p class="step-n">05 · Contents</p>
+    <h3>What landed in the file</h3>
+    <figure>
+      <img src="images/05-anatomy.png" alt="Summary of the backup file showing 103 config fields, 105 members split across 100 member, 2 owner and 3 moderator roles, content filter counts, 3 aliases, 4 header matches, 3 bans, archiver states and the warnings list">
+      <figcaption>103 config fields and every roster entry with its preferences. This is the
+      concrete answer to a question asked during design: what does a backup of a list with 100
+      members actually look like?</figcaption>
+    </figure>
+    <figure>
+      <img src="images/06-json.png" alt="Pretty-printed JSON showing schema_version 1.0, the list name, an export timestamp, and config fields including the nested topics structure">
+      <figcaption>Ordinary JSON, readable by anything. <code>topics</code> is a
+      <code>PickleType</code> of tuples in the database and JSON has no tuples, so it round-trips as
+      nested arrays and restore casts it back.</figcaption>
+    </figure>
+  </div>
+
+  <div class="step">
+    <p class="step-n">06 · Schema</p>
+    <h3>A well Validated format</h3>
+    <p>A marshmallow schema checks the dict on the way out and again on the way in, before the
+    first database write. Enum-backed fields are constrained against the running Mailman's own
+    enums, generated at import time rather than hardcoded.</p>
+    <figure>
+      <img src="images/16-schema.gif" alt="Animated walkthrough of the marshmallow schema module defining the backup format, showing the member, content filter, header match and top-level backup schemas">
+      <figcaption><code>schema/list_backup_v1.py</code>. A backup carrying an unexpected top-level
+      key is rejected, which is correct behaviour for <code>schema_version</code> 1.0.</figcaption>
+    </figure>
+  </div>
+
+  <div class="step">
+    <p class="step-n">07 · Security</p>
+    <h3>What is deliberately absent</h3>
+    <figure>
+      <img src="images/07-security.png" alt="Check confirming moderator_password is not present among the 103 exported config fields, and printing the warning that it must be reset manually after a restore">
+      <figcaption>Backup files get emailed and attached to tickets, so the moderator password stays
+      out. The file records why, and <code>mailman restore</code> repeats it on success.</figcaption>
+    </figure>
+  </div>
+
+  <div class="step">
+    <p class="step-n">08 · Disaster</p>
+    <h3>The list is deleted</h3>
+    <figure>
+      <img src="images/08-delete.png" alt="mailman remove deletes the list, mailman lists then reports no matching mailing lists, and mailman members fails with No such list">
+      <figcaption>Gone from the database. <code>mailman members</code> now errors.</figcaption>
+    </figure>
+  </div>
+
+  <div class="step">
+    <p class="step-n">09 · Recovery</p>
+    <h3>mailman restore</h3>
+    <figure>
+      <img src="images/09-restore.png" alt="mailman restore rebuilds the list, reporting the restored name and password reminder, then showing 100 members plus both owners and all three moderators by name">
+      <figcaption>Rebuilt from the file alone. Owners and moderators come back by name and role.</figcaption>
+    </figure>
+  </div>
+
+  <div class="step">
+    <p class="step-n">10 · Verification</p>
+    <h3>Same command, before and after</h3>
+    <div class="pair">
+      <figure>
+        <img src="images/03-state-before.png" alt="List state printed before the backup was taken">
+        <figcaption>Before</figcaption>
+      </figure>
+      <figure>
+        <img src="images/10-state-after.png" alt="List state printed after the restore, matching the before output field for field">
+        <figcaption>After</figcaption>
+      </figure>
+    </div>
+    <figcaption>Field for field, including the header match rules in their
+    original evaluation order: <code>(0, x-spam-flag) (1, subject) (2, from) (3, x-mailer)</code>.</figcaption>
+  </div>
+
+  <div class="step">
+    <p class="step-n">11 · Per-member state</p>
+    <h3>Preferences, not just counts</h3>
+    <figure>
+      <img src="images/15-member-detail.png" alt="Restored member details showing MIME digest mode, plaintext digest mode, delivery disabled by bounces, a verification date, an address that stayed unverified, and member100 both subscribed and banned">
+      <figcaption>Digest modes, a bounce-disabled member, a verification date, an address that was
+      never verified staying that way. The last two lines are the ordering case:
+      <code>member100@example.com</code> matches the live ban <code>^member100@.*</code> and is
+      restored regardless.</figcaption>
+    </figure>
+  </div>
+
+  <div class="step">
+    <p class="step-n">12 · Fidelity</p>
+    <h3>The restored list re-exports identically</h3>
+    <figure>
+      <img src="images/11-fidelity.png" alt="Backing up the restored list and diffing it against the original backup prints IDENTICAL">
+      <figcaption>Export the restored list, drop the timestamp, diff against the original. Anything
+      the restore lost or mangled would surface here.</figcaption>
+    </figure>
+  </div>
+
+  <div class="step">
+    <p class="step-n">13 · Migration</p>
+    <h3>Restoring under a different name and domain</h3>
+    <figure>
+      <img src="images/12-cross-domain.png" alt="mailman restore with the listname flag creates staff@backup-target.example.org alongside the original list, with 100 members">
+      <figcaption><code>--listname</code> overrides the name recorded in the file, so a list can be
+      rebuilt on a different server or moved between domains.</figcaption>
+    </figure>
+  </div>
+
+  <div class="step">
+    <p class="step-n">14 · Failure modes</p>
+    <h3>The refusal to do damage</h3>
+    <figure>
+      <img src="images/13-safety.png" alt="Three failed restores in sequence: list already exists, invalid JSON, and valid JSON that is an array rather than an object, each exiting with code 2">
+      <figcaption>Restoring over a live list, malformed JSON, and valid JSON that is not an object.
+      Every one exits non-zero, so the transaction wrapping the subcommand rolls back.</figcaption>
+    </figure>
+    <figure>
+      <img src="images/14-overwrite.png" alt="The overwrite flag prompts for confirmation, answering no aborts the restore, and the list still reports 100 members afterwards">
+      <figcaption><code>--overwrite</code> is the only destructive path, so it asks first. Answering
+      no leaves the list untouched. <code>--yes</code> skips the prompt for unattended recovery,
+      where there is no terminal to answer it and <code>click.confirm</code> would otherwise
+      abort.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="format">
+  <h2>Backup format</h2>
+  <p>One JSON file at <code>schema_version</code> 1.0.</p>
+  <table>
+    <tr><th>Section</th><th>Contents</th></tr>
+    <tr><td class="m">config</td><td>103 scalar fields: every <code>IMailingList</code> attribute merged with the raw table columns the interface does not expose. Enums stored as names, durations as seconds, datetimes as ISO 8601</td></tr>
+    <tr><td class="m">content_filters</td><td><code>filter_types</code>, <code>pass_types</code>, <code>filter_extensions</code>, <code>pass_extensions</code></td></tr>
+    <tr><td class="m">members</td><td>Every roster entry with role, display name, verification date, delivery mode, delivery status, moderation action, subscription mode</td></tr>
+    <tr><td class="m">acceptable_aliases</td><td>Literal addresses and regular expressions, sorted</td></tr>
+    <tr><td class="m">header_matches</td><td>Header, pattern, chain, tag and position, sorted by position</td></tr>
+    <tr><td class="m">bans</td><td>List-scoped bans, literal and regex</td></tr>
+    <tr><td class="m">archivers</td><td>Per-archiver enabled state</td></tr>
+    <tr><td class="m">_warnings</td><td>Operator notes. Currently the moderator password caveat</td></tr>
+  </table>
+  <p>Domains are not included. <code>IDomain</code> holds server-level routing and Postfix
+  configuration, which has no clue on how a list behaves, and <code>fqdn_listname</code> already
+  identifies which domain a list belongs to. If that domain is missing on the target server, restore
+  stops through <code>IDomainManager</code> before writing anything.</p>
+</section>
+
+<section id="design">
+  <h2>Design</h2>
+
+  <h3>Why the logic sits in Core</h3>
+  <p>The obvious alternative was to build this in Postorius as two buttons, assembling the file
+  client-side from endpoints that already exist: <code>/config</code>, <code>/header-matches</code>,
+  <code>/bans</code>, <code>/archivers</code>. Least work by a wide margin, and it was the first
+  suggestion on the table.</p>
+  <p>Two things ruled it out. Postorius is optional. Core is the only component you must run to
+  operate a mailing list, and at least one other UI exists, so anyone not running Postorius would
+  get nothing at all.</p>
+  <p>The second reason is more interesting. The REST API has no atomic semantics: creating a list
+  and configuring it are separate calls. If the config call fails after the create succeeds, you are
+  left with a list that exists and is wrong, which is worse than no list, because it looks like the
+  restore worked. Inside Core the rebuild is one transaction. It completes or it rolls back to
+  nothing.</p>
+
+  <h3>The interface</h3>
+  <p><code>IListBackupManager</code> is a Zope Component Architecture interface registered in
+  <code>configure.zcml</code>. Callers use <code>getUtility(IListBackupManager)</code> and never
+  import the concrete class, so a second implementation, an S3 backend for instance, can be added
+  later without touching them.</p>
+<pre><code>def export_list(mlist):
+    """Returns a JSON-serializable dict.  No file I/O."""
+
+def restore_list(data, fqdn_listname=None, overwrite=False):
+    """Accepts a parsed dict, not a path."""</code></pre>
+  <p>Neither method touches the filesystem, which is the point. The REST endpoints that will call
+  them have an HTTP body, not a path. So the CLI owns file I/O and the library owns state.
+  <code>fqdn_listname</code> is a string rather than an <code>IMailingList</code>, because you cannot
+  require a list object when the whole job is recreating a list that no longer exists. Passing it
+  also overrides what the file says, which is how cross-domain restore works.</p>
+  <p><code>restore_list()</code> never commits. <code>mailman.bin.mailman</code> already wraps every
+  subcommand in a transaction, so the caller owns it and any failure unwinds the whole restore.</p>
+</section>
+
+<section id="history">
+  <h2>How it was built</h2>
+  <p>33 commits were made between 25 May and 20 August. The shape of the work changed twice, both times
+  because of review.</p>
+  <table>
+    <tr><th>When</th><th>What</th></tr>
+    <tr><td class="m">25–29 May</td><td>ZCA interface, <code>_coerce_for_json</code>, config and content filter export, member rosters across all three roles</td></tr>
+    <tr><td class="m">1–3 Jun</td><td>Export integrity test, timezone-aware timestamps, <code>ILanguage</code> serialisation, isort length-sorting fixes</td></tr>
+    <tr><td class="m">26 Jun</td><td><strong>First review lands.</strong> <code>export_list()</code> stops writing files and returns a dict; concrete manager moves into <code>model/</code>; utility registered in <code>configure.zcml</code></td></tr>
+    <tr><td class="m">1–3 Jul</td><td><code>IBackupManager</code> becomes <code>IListBackupManager</code>. Extended export: aliases, header matches, bans, archivers. <code>mailman backup</code> command. The <code>utilities/backup.py</code> stub is deleted</td></tr>
+    <tr><td class="m">7 Jul</td><td><strong>Second review lands.</strong> The format needed a real schema definition rather than ad-hoc serialisation, so marshmallow goes in and <code>export_list()</code> validates its own output</td></tr>
+    <tr><td class="m">12–16 Jul</td><td>Raw SQLAlchemy columns merged into export (<code>topics</code> was among the ~25 the interface hides). <code>restore_list()</code> skeleton with version check and domain guard, <code>create_list()</code> lifecycle, scalar config restore with enum, timedelta and topics casting</td></tr>
+    <tr><td class="m">20 Aug</td><td>Enum constraints in the schema, the full restore engine, the round-trip and edge-case suites, <code>mailman restore</code>, NEWS entry</td></tr>
+  </table>
+  <p>The two review rounds are the reason the signatures look the way they do. Every change they
+  asked for pointed the same direction: the library should deal in data structures, and let whoever
+  calls it decide about files and transports.</p>
+</section>
+
+<section id="state">
+  <h2>Status</h2>
+  <ul class="status">
+    <li><span class="tag done">Done</span> <span><code>IListBackupManager</code> interface and ZCA registration</span></li>
+    <li><span class="tag done">Done</span> <span>Export covering all eight sections</span></li>
+    <li><span class="tag done">Done</span> <span>Restore in a single transaction, schema validated before the first write</span></li>
+    <li><span class="tag done">Done</span> <span><code>mailman backup</code>, <code>mailman restore</code> with <code>--listname</code>, <code>--overwrite</code>, <code>--yes</code></span></li>
+    <li><span class="tag done">Done</span> <span>67 tests · 100% branch diff coverage on 287 changed lines · green on SQLite, PostgreSQL and MySQL, Python 3.9 to 3.13</span></li>
+    <li><span class="tag todo">Next</span> <span><code>GET /3.1/lists/{listname}/backup</code> and <code>POST .../restore</code> in Core</span></li>
+    <li><span class="tag todo">Next</span> <span><code>.backup()</code> and <code>.restore()</code> in mailmanclient</span></li>
+    <li><span class="tag todo">Next</span> <span>Download and upload buttons in Postorius</span></li>
+  </ul>
+  <p>The REST endpoints are specified and not implemented, and the two layers above them wait on
+  those. The library is already the right shape for them: <code>export_list()</code> returns a dict
+  and <code>restore_list()</code> takes one, with no file handling in either.</p>
+  <p>!1505 is open with 7 review threads outstanding.</p>
+</section>
+
+<section id="notes">
+  <h2>Implementation notes</h2>
+
+  <h3>Header match positions are ranks, not slots</h3>
+  <p>The project proposal argued that header match rules must be restored with
+  <code>insert(position, ...)</code>, on the grounds that a list with rules at
+  <code>[0, 2, 5]</code> would otherwise collapse to <code>[0, 1, 2]</code> and lose information.
+  Writing the test to demonstrate that produced this instead, while building the fixture:</p>
+<pre><code>ValueError: There are 2 header matches for this list, the new
+position cannot be 2 or higher</code></pre>
+  <p>Non-contiguous positions cannot exist. The <code>position</code> setter rejects any value at or
+  above the current rule count, and <code>HeaderMatchList.remove()</code> renumbers the remainder
+  into a contiguous run. So position encodes the order the antispam chain evaluates rules in, and
+  nothing else. Restore sorts by position and appends, which reproduces that ordering exactly and
+  survives a hand-edited file with gaps in it, where <code>insert()</code> would raise.</p>
+
+  <h3>Members before bans</h3>
+  <p><code>MailingList.subscribe()</code> raises <code>MembershipIsBannedError</code> for any address
+  a list-scoped ban matches, and <code>BanManager.is_banned()</code> matches regular expressions,
+  not only literal addresses. A list can reasonably ban <code>^watched@.*</code> while
+  <code>watched@example.com</code> is still subscribed. Restore bans first and every such member
+  throws, taking the whole operation down. Step 11 of the run above is this case, working.</p>
+
+  <h3>Type detection reads the column, not the value</h3>
+  <p>Inferring a config field's type from its current value breaks whenever that value is
+  <code>None</code>, which is the normal state for an enum column never set on a fresh list. The
+  enum name then falls through to a generic <code>setattr</code> and gets written straight into an
+  <code>Enum</code> column. Detection now checks the live value first, then falls back to the
+  SQLAlchemy column, whose <code>TypeDecorator</code> carries the enum class on its
+  <code>.enum</code> attribute. <code>Interval</code> columns have the same problem and the same
+  fix.</p>
+
+  <h3>preferred_language fails late without a fallback</h3>
+  <p>The setter takes a bare language code and stores it as-is. The getter resolves it through
+  <code>ILanguageManager</code>. Restore a list whose original server had a language this one does
+  not, and the restore reports success, then raises <code>KeyError</code> on every subsequent read,
+  somewhere unrelated and much later. Restore checks membership first and falls back to the site
+  default, which is what <code>importer.py</code> does.</p>
+
+  <h3>A failed subscribe poisons the session</h3>
+  <p>Calling <code>subscribe()</code> for an address already on the roster raises, and by then the
+  SQLAlchemy session is unusable for the rest of the transaction, so wrapping it in
+  <code>try/except</code> does not help. Restore checks <code>is_subscribed()</code> up front and
+  only calls <code>subscribe()</code> when it is certain to succeed. A backup listing the same
+  member twice restores cleanly.</p>
+</section>
+
+<section id="limits">
+  <h2>Known limitations</h2>
+
+  <h3>Archiver round-trip can clear a list-level flag</h3>
+  <p><code>ListArchiver.is_enabled</code> reads
+  <code>system_archiver.is_enabled and self._is_enabled</code> but writes only
+  <code>_is_enabled</code>. On a server where an archiver is disabled globally, export records
+  <code>False</code> even when the list's own flag was <code>True</code>, and restore writes that
+  back, losing the list's setting for good. The only fix reaches into the private attribute, since
+  <code>IListArchiver</code> exposes nothing else, so it is flagged for the maintainers rather than
+  done unilaterally.</p>
+
+  <h3>Member preference inheritance gets flattened</h3>
+  <p><code>delivery_mode</code> and <code>delivery_status</code> are lookup properties that walk
+  member, then address, then user, then system defaults. Export captures the effective value, so
+  restore writes an explicit member-level override where none may have existed. Those members then
+  stop tracking later changes to the site defaults. Exporting only explicit overrides instead breaks
+  restoring onto a fresh server, where the user and address preference objects do not exist at all.
+  The current behaviour always produces a working list, which seemed the better failure.</p>
+
+  <h3>subscription_mode cannot be restored</h3>
+  <p>It is derived from whether the subscriber is an <code>IAddress</code> or an <code>IUser</code>.
+  Restore always subscribes an <code>IAddress</code>, so a member originally subscribed as a user
+  comes back as an address. The field is exported for diagnostics.</p>
+</section>
+
+<section id="code">
+  <h2>Code</h2>
+  <table>
+    <tr><th>File</th><th></th></tr>
+    <tr><td class="m"><a href="https://gitlab.com/Naveeeya/mailman/-/blob/gsoc/per-list-backup-restore/src/mailman/interfaces/backup_manager.py">interfaces/backup_manager.py</a></td><td>The <code>IListBackupManager</code> interface</td></tr>
+    <tr><td class="m"><a href="https://gitlab.com/Naveeeya/mailman/-/blob/gsoc/per-list-backup-restore/src/mailman/model/backup_manager.py">model/backup_manager.py</a></td><td>Export and restore engine</td></tr>
+    <tr><td class="m"><a href="https://gitlab.com/Naveeeya/mailman/-/blob/gsoc/per-list-backup-restore/src/mailman/commands/cli_backup.py">commands/cli_backup.py</a></td><td>Both commands</td></tr>
+    <tr><td class="m"><a href="https://gitlab.com/Naveeeya/mailman/-/blob/gsoc/per-list-backup-restore/src/mailman/schema/list_backup_v1.py">schema/list_backup_v1.py</a></td><td>Backup format schema</td></tr>
+    <tr><td class="m"><a href="https://gitlab.com/Naveeeya/mailman/-/blob/gsoc/per-list-backup-restore/src/mailman/model/tests/test_backup_manager.py">model/tests/test_backup_manager.py</a></td><td>49 tests</td></tr>
+    <tr><td class="m"><a href="https://gitlab.com/Naveeeya/mailman/-/blob/gsoc/per-list-backup-restore/src/mailman/commands/tests/test_cli_backup.py">commands/tests/test_cli_backup.py</a></td><td>18 tests</td></tr>
+  </table>
+  <p>Proposed upstream as <a href="https://gitlab.com/mailman/mailman/-/merge_requests/1505">merge
+  request !1505</a>, open for review. The last commit made during GSoC is
+  <code>02660ea2</code>.</p>
+
+</section>
+
+<footer>
+  Per-list backup and restore · GNU Mailman Core · Google Summer of Code 2026<br>
+  Navya Khanna. Mentors: Abhilash Raj, Mark Sapiro, Stephen J. Turnbull.
+</footer>
+
+
+</main>
+</body>
+</html>
