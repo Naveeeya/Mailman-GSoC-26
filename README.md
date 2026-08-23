@@ -1,4 +1,4 @@
-# Per-List Backup and Restore — GNU Mailman — GSoC 2026
+# Per-List Backup and Restore : GNU Mailman - GSoC 2026
 
 **Report: https://naveeeya.github.io/Mailman-GSoC-26/**
 
